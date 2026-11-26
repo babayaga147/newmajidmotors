@@ -347,7 +347,7 @@ footer .brand span{font-size:1rem;color:#fff}
     </div>
     <div class="f-bar">
       <span>© <span id="yr">2026</span> New Majid Motors · The Luxury Car Hub</span>
-      <span>Car photos: <a href="https://commons.wikimedia.org" target="_blank" rel="noopener" style="text-decoration:underline">Wikimedia Commons</a> contributors, CC BY-SA</span>
+      <span>Car photos: Wikipedia / <a href="https://commons.wikimedia.org" target="_blank" rel="noopener" style="text-decoration:underline">Wikimedia Commons</a> contributors, CC BY-SA</span>
       <span class="credit">Powered by <b>IMRAN SAHAB Digital Agency</b></span>
     </div>
   </div>
@@ -406,6 +406,50 @@ const PHOTOS = { // Wikimedia Commons files (Creative Commons). Model reference 
   "F-Type":"2020_Jaguar_F-Type_coupe_IMG_5392.jpg",
 };
 const photoUrl = f => "https://commons.wikimedia.org/wiki/Special:FilePath/" + encodeURIComponent(f) + "?width=960";
+const WIKI = { // Wikipedia article titles; the page loads each article's main photo (Wikimedia Commons, Creative Commons)
+  "G 400":["Mercedes-Benz G-Class (W463)","Mercedes-Benz G-Class"],
+  "E 350":["Mercedes-Benz E-Class (W214)","Mercedes-Benz E-Class"], "E 200":["Mercedes-Benz E-Class (W214)","Mercedes-Benz E-Class"],
+  "F-Pace 4WD":["Jaguar F-Pace"],
+  "C 63":["Mercedes-Benz C-Class (W206)","Mercedes-AMG C 63"],
+  "i7 50 Sport Saloon":["BMW 7 Series (G70)","BMW i7"], "i7":["BMW 7 Series (G70)","BMW i7"], "i7 M Sport Saloon":["BMW 7 Series (G70)","BMW i7"],
+  "SL 43":["Mercedes-Benz SL-Class (R232)","Mercedes-AMG SL"],
+  "4 Series":["BMW 4 Series (G22)","BMW 4 Series"],
+  "GT 43":["Mercedes-AMG GT 4-Door Coupé"],
+  "i5 eDrive40 Sport":["BMW 5 Series (G60)","BMW i5"],
+  "Taycan":["Porsche Taycan"],
+  "EQS 4WD":["Mercedes-Benz EQS"],
+  "iX xDrive50 4WD":["BMW iX"],
+  "EQE 350":["Mercedes-Benz EQE"],
+  "CLA":["Mercedes-Benz CLA-Class (C118)","Mercedes-Benz CLA-Class"],
+  "Defender":["Land Rover Defender (L663)","Land Rover Defender"],
+  "Camaro":["Chevrolet Camaro (sixth generation)","Chevrolet Camaro"],
+  "F-Type":["Jaguar F-Type"],
+};
+const imgCache = {};
+async function wikiPhoto(model){
+  for (const t of (WIKI[model]||[])){
+    try{
+      const r = await fetch("https://en.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(t.replace(/ /g,"_")));
+      if (!r.ok) continue;
+      const j = await r.json(), o = j.originalimage, th = j.thumbnail;
+      if (o && o.width <= 1600) return o.source;
+      if (th) return th.source.replace(/\/\d+px-/, "/960px-");
+      if (o) return o.source;
+    }catch(e){}
+  }
+  return null;
+}
+function photoFor(model){ return imgCache[model] ||= wikiPhoto(model); }
+function loadPhotos(){
+  grid.querySelectorAll("img[data-m]").forEach(async img=>{
+    const m = img.dataset.m, backup = PHOTOS[m] ? photoUrl(PHOTOS[m]) : null;
+    const done = ()=>{ img.classList.add("ok"); img.parentNode.classList.add("loaded"); };
+    img.onload = done;
+    img.onerror = ()=>{ if (backup && img.src !== backup) img.src = backup; else img.remove(); };
+    const src = await photoFor(m);
+    if (src) img.src = src; else if (backup) img.src = backup; else img.remove();
+  });
+}
 const wa = (msg) => WHATSAPP ? `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(msg)}` : "#contact";
 const arrow = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 8h10M9 4l4 4-4 4"/></svg>';
 const grid = document.getElementById("grid");
@@ -415,13 +459,14 @@ grid.innerHTML = sorted.map(([make,model,st,tags,note])=>{
   const label = st==="site" ? "On site" : "At port";
   const msg = `Hello New Majid Motors, I'm interested in the ${make} ${model}${note?" ("+note+")":""} (${label}). Is it available?`;
   return `<article class="car" data-s="${st}">
-    <div class="ph">${PHOTOS[model]?`<img src="${photoUrl(PHOTOS[model])}" alt="${make} ${model}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="this.classList.add('ok');this.parentNode.classList.add('loaded')" onerror="this.remove()">`:""}<div class="ph-fb"><img src="assets/flags.svg" alt=""><span>${make}</span></div></div>
+    <div class="ph"><img data-m="${model}" alt="${make} ${model}" decoding="async" referrerpolicy="no-referrer"><div class="ph-fb"><img src="assets/flags.svg" alt=""><span>${make}</span></div></div>
     <div class="top"><span class="make">${make}</span><span class="status ${st}"><i class="dot ${st}"></i>${label}</span></div>
     <h3 class="model">${model}</h3>${note?`<p class="note">${note}</p>`:""}
     <div class="bottom"><div class="tags">${tags.map(t=>`<span class="tag${t==="Electric"?" ev":""}">${t}</span>`).join("")}</div>
     <a class="ask" href="${wa(msg)}" ${WHATSAPP?'target="_blank" rel="noopener"':""}>Enquire ${arrow}</a></div>
   </article>`;
 }).join("");
+loadPhotos();
 const nS = CARS.filter(c=>c[2]==="site").length, nP = CARS.length-nS;
 for (const [id,v] of [["nSite",nS],["nPort",nP],["cSite",nS],["cPort",nP],["cAll",CARS.length]]) document.getElementById(id).textContent=v;
 document.querySelectorAll(".js-wa").forEach(a=>{ if(WHATSAPP){ a.href=wa("Hello New Majid Motors, I'd like to book a viewing."); a.target="_blank"; a.rel="noopener"; }});
