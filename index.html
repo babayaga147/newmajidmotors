@@ -140,16 +140,20 @@ body:not(.revealed) .nav{opacity:0;transform:translateY(-14px);pointer-events:no
 .filters [aria-pressed="true"] small{color:#bdbab2}
 
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.ph{position:relative;margin:-24px -24px 20px;aspect-ratio:3/2;overflow:hidden;border-radius:13px 13px 0 0;background:linear-gradient(150deg,#1b1b1d,#0b0b0c)}
-.ph::before{content:"";position:absolute;inset:-20px;background:var(--src,none) center/cover;filter:blur(22px) brightness(.85) saturate(1.1);opacity:0;transition:opacity .5s}
-.ph.loaded::before{opacity:1}
-.ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:center;transition:transform .6s var(--ease),opacity .5s;opacity:0}
-.ph img.ok{opacity:1}
-.car:hover .ph img{transform:scale(1.02)}
-.ph .ph-fb{position:absolute;inset:0;display:grid;place-items:center;align-content:center;gap:10px;color:#fff;transition:opacity .4s}
-.ph .ph-fb img{position:static;width:64px;height:auto;opacity:.85}
-.ph .ph-fb span{font-family:var(--race);font-style:italic;font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
-.ph.loaded .ph-fb{opacity:0}
+.ph{position:relative;margin:-24px -24px 20px;aspect-ratio:3/2;overflow:hidden;border-radius:13px 13px 0 0;isolation:isolate;
+  background:radial-gradient(70% 90% at 50% -10%,rgba(255,255,255,.16),rgba(255,255,255,0) 60%),linear-gradient(180deg,#141416 0%,#0a0a0b 62%,#050505 100%)}
+.ph::before{content:"";position:absolute;left:8%;right:8%;top:62%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent);z-index:1}
+.ph::after{content:"";position:absolute;left:50%;top:-30%;width:140%;height:90%;transform:translateX(-50%);background:radial-gradient(closest-side,rgba(255,255,255,.07),transparent);pointer-events:none}
+.ph-show{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:0 20px 8%;text-align:center;transition:transform .6s var(--ease)}
+.ph-make{font-family:var(--race);font-style:italic;text-transform:uppercase;letter-spacing:.06em;line-height:1;font-size:clamp(1.5rem,2.4vw,2.1rem);
+  background:linear-gradient(180deg,#ffffff 0%,#d9dbde 48%,#8d9298 52%,#e8e9eb 100%);-webkit-background-clip:text;background-clip:text;color:transparent;transform:skewX(-8deg)}
+.ph-model{font-size:.7rem;font-weight:700;letter-spacing:.32em;text-transform:uppercase;color:rgba(255,255,255,.55)}
+.ph-flag{position:absolute;left:18px;top:16px;width:30px;opacity:.55;z-index:2}
+.ph-reflect{position:absolute;left:0;right:0;top:62%;bottom:0;background:linear-gradient(180deg,rgba(255,255,255,.05),transparent 60%);pointer-events:none}
+.car:hover .ph-show{transform:translateY(-3px)}
+.ph > img.ph-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:3;transition:transform .6s var(--ease)}
+.car:hover .ph > img.ph-photo{transform:scale(1.03)}
+.ph.has-photo .ph-show,.ph.has-photo .ph-flag{display:none}
 .car{position:relative;display:flex;flex-direction:column;min-height:196px;padding:24px 24px 20px;border:1px solid var(--line);border-radius:14px;
   background:var(--bg-2);box-shadow:0 1px 2px rgba(20,19,15,.04);overflow:hidden;transition:transform .3s var(--ease),border-color .3s,box-shadow .3s}
 .car::before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(214,169,69,.12) 50%,transparent 70%);transform:translateX(-100%);transition:transform .9s var(--ease);pointer-events:none}
@@ -349,7 +353,6 @@ footer .brand span{font-size:1rem;color:#fff}
     </div>
     <div class="f-bar">
       <span>© <span id="yr">2026</span> New Majid Motors · The Luxury Car Hub</span>
-      <span>Car photos: Wikipedia / <a href="https://commons.wikimedia.org" target="_blank" rel="noopener" style="text-decoration:underline">Wikimedia Commons</a> contributors, CC BY-SA</span>
       <span class="credit">Powered by <b>IMRAN SAHAB Digital Agency</b></span>
     </div>
   </div>
@@ -386,70 +389,19 @@ const CARS = [
   ["Mercedes-Benz","E 200","site",["Saloon"]],
 ];
 
-const PHOTOS = { // Wikimedia Commons files (Creative Commons). Model reference photos; colours may differ from the actual car.
-  "G 400":"Mercedes-Benz_G_500_W_463_(2018)_1X7A0308.jpg",
-  "E 350":"Mercedes-Benz_W214_220d_1X7A1731.jpg", "E 200":"Mercedes-Benz_W214_220d_1X7A1731.jpg",
-  "F-Pace 4WD":"2021_Jaguar_F-Pace_HSE_Diesel_MHEV_AWD_Automatic_facelift_2.0_Front.jpg",
-  "C 63":"Mercedes-AMG_C_63_S_E_Performance_(W206)_front.jpg",
-  "i7 50 Sport Saloon":"BMW_G70E_i7_xDrive60_Design_Pure_Excellence_BMW_Individual_Oxide_Grey_(6).jpg",
-  "i7":"BMW_G70E_i7_xDrive60_Design_Pure_Excellence_BMW_Individual_Oxide_Grey_(6).jpg",
-  "i7 M Sport Saloon":"BMW_G70E_i7_xDrive60_Design_Pure_Excellence_BMW_Individual_Oxide_Grey_(6).jpg",
-  "SL 43":"Mercedes-AMG_SL_63_(R232)_1X7A7444.jpg",
-  "4 Series":"BMW_M440i_xDrive_Coupé_(G22)_front.jpg",
-  "GT 43":"Mercedes-AMG_GT63_S_4MATIC+_(X290)_front.jpg",
-  "i5 eDrive40 Sport":"BMW_G60_520i_1X7A2443.jpg",
-  "Taycan":"Porsche_Taycan_4S_1X7A0337.jpg",
-  "EQS 4WD":"Mercedes-Benz_EQS_450+_V297_white_(2).jpg",
-  "iX xDrive50 4WD":"BMW_I20_iX_xDrive50_Sport_Sophisto_Grey_Brilliant_Effect_(4).jpg",
-  "EQE 350":"Mercedes-Benz_V295_350+_1X7A0313.jpg",
-  "CLA":"Mercedes-Benz_CLA-Klasse_Coupé_(C118)_CLA_200_(2021)_(53326863713).jpg",
-  "Defender":"Land_Rover_Defender_110_D40_SE_L663_Pangea_Green_(1).jpg",
-  "Camaro":"2019_Chevrolet_Camaro_base,_front_11.9.19.jpg",
-  "F-Type":"2020_Jaguar_F-Type_coupe_IMG_5392.jpg",
+/* ===== Car photos: add your own photo for a car by putting the file in assets/cars/ and listing it here.
+   Example:  "G 400": "assets/cars/g400.jpg",
+   Best: front three-quarter view, same angle and plain background for every car. ===== */
+const CAR_PHOTOS = {
 };
-const photoUrl = f => "https://commons.wikimedia.org/wiki/Special:FilePath/" + encodeURIComponent(f) + "?width=960";
-const WIKI = { // Wikipedia article titles; the page loads each article's main photo (Wikimedia Commons, Creative Commons)
-  "G 400":["Mercedes-Benz G-Class (W463)","Mercedes-Benz G-Class"],
-  "E 350":["Mercedes-Benz E-Class (W214)","Mercedes-Benz E-Class"], "E 200":["Mercedes-Benz E-Class (W214)","Mercedes-Benz E-Class"],
-  "F-Pace 4WD":["Jaguar F-Pace"],
-  "C 63":["Mercedes-Benz C-Class (W206)","Mercedes-AMG C 63"],
-  "i7 50 Sport Saloon":["BMW 7 Series (G70)","BMW i7"], "i7":["BMW 7 Series (G70)","BMW i7"], "i7 M Sport Saloon":["BMW 7 Series (G70)","BMW i7"],
-  "SL 43":["Mercedes-Benz SL-Class (R232)","Mercedes-AMG SL"],
-  "4 Series":["BMW 4 Series (G22)","BMW 4 Series"],
-  "GT 43":["Mercedes-AMG GT 4-Door Coupé"],
-  "i5 eDrive40 Sport":["BMW 5 Series (G60)","BMW i5"],
-  "Taycan":["Porsche Taycan"],
-  "EQS 4WD":["Mercedes-Benz EQS"],
-  "iX xDrive50 4WD":["BMW iX"],
-  "EQE 350":["Mercedes-Benz EQE"],
-  "CLA":["Mercedes-Benz CLA-Class (C118)","Mercedes-Benz CLA-Class"],
-  "Defender":["Land Rover Defender (L663)","Land Rover Defender"],
-  "Camaro":["Chevrolet Camaro (sixth generation)","Chevrolet Camaro"],
-  "F-Type":["Jaguar F-Type"],
-};
-const imgCache = {};
-async function wikiPhoto(model){
-  for (const t of (WIKI[model]||[])){
-    try{
-      const r = await fetch("https://en.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(t.replace(/ /g,"_")));
-      if (!r.ok) continue;
-      const j = await r.json(), o = j.originalimage, th = j.thumbnail;
-      if (o && o.width <= 1600) return o.source;
-      if (th) return th.source.replace(/\/\d+px-/, "/960px-");
-      if (o) return o.source;
-    }catch(e){}
-  }
-  return null;
-}
-function photoFor(model){ return imgCache[model] ||= wikiPhoto(model); }
 function loadPhotos(){
-  grid.querySelectorAll("img[data-m]").forEach(async img=>{
-    const m = img.dataset.m, backup = PHOTOS[m] ? photoUrl(PHOTOS[m]) : null;
-    const done = ()=>{ img.parentNode.style.setProperty("--src", `url("${img.currentSrc||img.src}")`); img.classList.add("ok"); img.parentNode.classList.add("loaded"); };
-    img.onload = done;
-    img.onerror = ()=>{ if (backup && img.src !== backup) img.src = backup; else img.remove(); };
-    const src = await photoFor(m);
-    if (src) img.src = src; else if (backup) img.src = backup; else img.remove();
+  grid.querySelectorAll(".car").forEach(card=>{
+    const m = card.dataset.m, src = CAR_PHOTOS[m] || CAR_PHOTOS[card.dataset.key];
+    if (!src) return;
+    const ph = card.querySelector(".ph"), img = new Image();
+    img.className = "ph-photo"; img.alt = card.dataset.name; img.decoding = "async";
+    img.onload = ()=>{ ph.appendChild(img); ph.classList.add("has-photo"); };
+    img.src = src;
   });
 }
 const wa = (msg) => WHATSAPP ? `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(msg)}` : "#contact";
@@ -460,8 +412,8 @@ const sorted = [...CARS].sort((a,b)=> (a[2]===b[2]?0:a[2]==="site"?-1:1));
 grid.innerHTML = sorted.map(([make,model,st,tags,note])=>{
   const label = st==="site" ? "On site" : "At port";
   const msg = `Hello New Majid Motors, I'm interested in the ${make} ${model}${note?" ("+note+")":""} (${label}). Is it available?`;
-  return `<article class="car" data-s="${st}">
-    <div class="ph"><img data-m="${model}" alt="${make} ${model}" decoding="async" referrerpolicy="no-referrer"><div class="ph-fb"><img src="assets/flags.svg" alt=""><span>${make}</span></div></div>
+  return `<article class="car" data-s="${st}" data-m="${model}" data-key="${make} ${model}" data-name="${make} ${model}">
+    <div class="ph"><img class="ph-flag" src="assets/flags.svg" alt=""><div class="ph-reflect"></div><div class="ph-show"><span class="ph-make">${make.replace("Mercedes-","Mercedes&#8209;")}</span><span class="ph-model">${model}</span></div></div>
     <div class="top"><span class="make">${make}</span><span class="status ${st}"><i class="dot ${st}"></i>${label}</span></div>
     <h3 class="model">${model}</h3>${note?`<p class="note">${note}</p>`:""}
     <div class="bottom"><div class="tags">${tags.map(t=>`<span class="tag${t==="Electric"?" ev":""}">${t}</span>`).join("")}</div>
