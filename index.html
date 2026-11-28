@@ -620,7 +620,7 @@ try {
   const draco = new DRACOLoader(); draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
   const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
   const SWATCH = ["#fefefe","#cdcdcd","#010101","#0f0f0f","#0a0a0a","#818181","#676767","#353535","#141414","#404040","#338ee5","#080808","#020202","#199519","#1a1a1a","#000000"];
-  const GLASS = 15, LAMP = 16;   // slot 16 = headlamp lenses (found by position)
+  const BODY = 0, GLASS = 10, LAMP = 16;   // white swatch = bodywork, blue swatch = glass; slot 16 = headlamp lenses (glass at the front corners)
 
   const timeout = setTimeout(() => fail("model load timeout"), 30000);
   loader.load(MODEL, (gltf) => {
@@ -661,7 +661,7 @@ try {
       // headlamp zone: the front 9% of the car, outer corners, at lamp height
       const along = front > 0 ? (bb.max[ax] - m[ax]) / L : (m[ax] - bb.min[ax]) / L;
       const side = Math.abs(m[sx] - ctr[sx]) / (W / 2), hgt = (m.y - bb.min.y) / H;
-      if (along < 0.09 && side > 0.38 && side < 0.92 && hgt > 0.36 && hgt < 0.66) cell = LAMP;
+      if ((cell === GLASS || cell === 15) && along < 0.16 && side > 0.3 && hgt > 0.25 && hgt < 0.75) cell = LAMP;
       cellOf[t] = cell;
       area[cell] += b.clone().sub(a).cross(c.clone().sub(a)).length() / 2;
     }
@@ -671,7 +671,7 @@ try {
     geo.setIndex(new THREE.BufferAttribute(newIdx, 1)); geo.clearGroups();
     for (let cell = 0, k = 0; cell < 17; cell++) { const s0 = k; while (k < tri && cellOf[order[k]] === cell) k++; if (k > s0) geo.addGroup(s0 * 3, (k - s0) * 3, cell); }
 
-    let body = -1; for (let k = 0; k < 15; k++) if (body < 0 || area[k] > area[body]) body = k;   // biggest swatch = bodywork
+    const body = BODY;
     console.table([...Array(17).keys()].map(k => ({ slot: k, colour: SWATCH[k] || "lamp", area: +area[k].toFixed(3), role: k === body ? "PAINT" : k === GLASS ? "GLASS" : k === LAMP ? "HEADLAMP" : "" })));
 
     const lum = (h) => { const col = new THREE.Color(h); return 0.2126*col.r + 0.7152*col.g + 0.0722*col.b; };
@@ -680,7 +680,7 @@ try {
       if (debug) return new THREE.MeshStandardMaterial({ color: k === LAMP ? 0xffff00 : new THREE.Color().setHSL(k / 16, 0.8, 0.5) });
       if (k === LAMP) return lampMat;
       if (k === body) return new THREE.MeshPhysicalMaterial({ color: PAINT, metalness: 0.15, roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.02, envMapIntensity: 1.5 });
-      if (k === GLASS) return new THREE.MeshPhysicalMaterial({ color: 0x0b0d10, roughness: 0.03, transparent: true, opacity: 0.55, envMapIntensity: 1.4, depthWrite: false });
+      if (k === GLASS || k === 15) return new THREE.MeshPhysicalMaterial({ color: 0x0b0d10, roughness: 0.03, transparent: true, opacity: 0.55, envMapIntensity: 1.4, depthWrite: false });
       const Lm = lum(hex);
       if (Lm < 0.012) return new THREE.MeshStandardMaterial({ color: hex, roughness: 0.7, metalness: 0.05, envMapIntensity: 0.6 });
       if (Lm > 0.35) return new THREE.MeshStandardMaterial({ color: hex, roughness: 0.2, metalness: 0.95, envMapIntensity: 1.3 });
@@ -704,9 +704,9 @@ try {
     });
 
     // camera: low front-right corner, whole car in frame
-    controls.target.set(0, H * 0.42, 0);
-    const dist = L * 1.55; camera.position.set(dist * 0.62, H * 0.62, dist * 0.82);
-    controls.minDistance = L * 0.95; controls.maxDistance = L * 2.4; controls.update();
+    controls.target.set(0, H * 0.05, 0);   // aim low so the car sits above the title
+    const dist = L * 1.95; camera.position.set(dist * 0.62, H * 0.75, dist * 0.82);
+    controls.minDistance = L * 1.2; controls.maxDistance = L * 2.8; controls.update();
 
     hero.classList.remove("three-loading"); hero.classList.add("three-on"); window.__3dReady = true;
 
