@@ -619,7 +619,7 @@ try {
   const draco = new DRACOLoader(); draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
   const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
   const SWATCH = ["#fefefe","#cdcdcd","#010101","#0f0f0f","#0a0a0a","#818181","#676767","#353535","#141414","#404040","#338ee5","#080808","#020202","#199519","#1a1a1a","#000000"];
-  const BODY = 0, GLASS = 10, LAMP = 16, LENS = 17;   // white swatch = bodywork, blue swatch = glass; slot 16 = headlamp lenses (glass at the front corners)
+  const BODY = 0, GLASS = 10, LAMP = 16, LENS = 17, TAIL = 18;   // white swatch = bodywork, blue swatch = glass; slot 16 = headlamp lenses (glass at the front corners)
 
   const timeout = setTimeout(() => fail("model load timeout"), 30000);
   loader.load(MODEL, (gltf) => {
@@ -649,7 +649,8 @@ try {
     const front = topB < topA ? 1 : -1;   // +1: front at the max end of the long axis
 
     const lum = (h) => { const col = new THREE.Color(h); return 0.2126*col.r + 0.7152*col.g + 0.0722*col.b; };
-    const cellOf = new Uint8Array(tri), area = new Float64Array(18);
+    const cellOf = new Uint8Array(tri), area = new Float64Array(19);
+    let tailMin = 1e9, tailMax = -1e9, tailY = 0, tailN = 0;
     const lampSum = { "-1": new THREE.Vector3(), "1": new THREE.Vector3() }, lampN = { "-1": 0, "1": 0 };
     const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), m = new THREE.Vector3();
     for (let t = 0; t < tri; t++) {
@@ -667,6 +668,10 @@ try {
           cell = LAMP; const k = String(Math.sign(m[sx] - ctr[sx]) || 1); lampSum[k].add(m); lampN[k]++;
         }
       }
+      // rear light bar: the last few % of the car, across its width, at bar height
+      if (along > 0.93 && hgt > 0.42 && hgt < 0.8 && cell !== BODY && (cell === GLASS || cell === 15 || lum(SWATCH[cell]) > 0.012)) {
+        cell = TAIL; tailMin = Math.min(tailMin, m[sx]); tailMax = Math.max(tailMax, m[sx]); tailY += m.y; tailN++;
+      }
       cellOf[t] = cell;
       area[cell] += b.clone().sub(a).cross(c.clone().sub(a)).length() / 2;
     }
@@ -674,17 +679,19 @@ try {
     const newIdx = new Uint32Array(index.length);
     order.forEach((t, k) => { newIdx[k*3] = index[t*3]; newIdx[k*3+1] = index[t*3+1]; newIdx[k*3+2] = index[t*3+2]; });
     geo.setIndex(new THREE.BufferAttribute(newIdx, 1)); geo.clearGroups();
-    for (let cell = 0, k = 0; cell < 18; cell++) { const s0 = k; while (k < tri && cellOf[order[k]] === cell) k++; if (k > s0) geo.addGroup(s0 * 3, (k - s0) * 3, cell); }
+    for (let cell = 0, k = 0; cell < 19; cell++) { const s0 = k; while (k < tri && cellOf[order[k]] === cell) k++; if (k > s0) geo.addGroup(s0 * 3, (k - s0) * 3, cell); }
 
     const body = BODY;
-    console.table([...Array(18).keys()].map(k => ({ slot: k, colour: SWATCH[k] || (k === LAMP ? "lamp" : "lens"), area: +area[k].toFixed(3), role: k === body ? "PAINT" : k === GLASS ? "GLASS" : k === LAMP ? "HEADLAMP" : "" })));
+    console.table([...Array(19).keys()].map(k => ({ slot: k, colour: SWATCH[k] || (k === LAMP ? "lamp" : k === LENS ? "lens" : "tail"), area: +area[k].toFixed(3), role: k === body ? "PAINT" : k === GLASS ? "GLASS" : k === LAMP ? "HEADLAMP" : "" })));
 
     const lampMat = new THREE.MeshStandardMaterial({ color: 0xd9dee5, roughness: 0.15, metalness: 0.3, emissive: 0xffffff, emissiveIntensity: 0, envMapIntensity: 1.5 });
     const lensMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.02, transparent: true, opacity: 0.18, envMapIntensity: 1.6, depthWrite: false, emissive: 0xfff8ee, emissiveIntensity: 0 });
-    const mats = [...SWATCH, null, null].map((hex, k) => {
-      if (debug) return new THREE.MeshStandardMaterial({ color: k === LAMP ? 0xffff00 : k === LENS ? 0x00ffff : new THREE.Color().setHSL(k / 16, 0.8, 0.5) });
+    const tailMat = new THREE.MeshStandardMaterial({ color: 0x3a0306, roughness: 0.12, metalness: 0.2, emissive: 0xff1020, emissiveIntensity: 0.15, envMapIntensity: 1.2 });
+    const mats = [...SWATCH, null, null, null].map((hex, k) => {
+      if (debug) return new THREE.MeshStandardMaterial({ color: k === LAMP ? 0xffff00 : k === LENS ? 0x00ffff : k === TAIL ? 0xff00ff : new THREE.Color().setHSL(k / 16, 0.8, 0.5) });
       if (k === LAMP) return lampMat;
       if (k === LENS) return lensMat;
+      if (k === TAIL) return tailMat;
       if (k === body) return new THREE.MeshPhysicalMaterial({ color: PAINT, metalness: 0.15, roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.02, envMapIntensity: 1.5 });
       if (k === GLASS || k === 15) return new THREE.MeshPhysicalMaterial({ color: 0x0b0d10, roughness: 0.03, transparent: true, opacity: 0.55, envMapIntensity: 1.4, depthWrite: false });
       const Lm = lum(hex);
@@ -693,7 +700,7 @@ try {
       return new THREE.MeshStandardMaterial({ color: hex, roughness: 0.4, metalness: 0.6, envMapIntensity: 1.0 });
     });
     mats.forEach(mt => mt.side = THREE.DoubleSide);
-    if (debug) { const box = document.createElement("pre"); box.style.cssText = "position:fixed;left:8px;top:90px;z-index:99;background:#000c;color:#fff;font:11px monospace;padding:8px;border-radius:6px"; box.textContent = `front ${front}  axis ${ax}\n` + [...Array(18).keys()].map(k => `${k}: ${SWATCH[k] || (k === LAMP ? "LAMP (yellow)" : "LENS (cyan)")}  area ${area[k].toFixed(2)}${k===body?"  <- paint":""}`).join("\n"); document.body.appendChild(box); }
+    if (debug) { const box = document.createElement("pre"); box.style.cssText = "position:fixed;left:8px;top:90px;z-index:99;background:#000c;color:#fff;font:11px monospace;padding:8px;border-radius:6px"; box.textContent = `front ${front}  axis ${ax}\n` + [...Array(19).keys()].map(k => `${k}: ${SWATCH[k] || (k === LAMP ? "LAMP (yellow)" : k === LENS ? "LENS (cyan)" : "TAIL (magenta)")}  area ${area[k].toFixed(2)}${k===body?"  <- paint":""}`).join("\n"); document.body.appendChild(box); }
 
     const car = new THREE.Mesh(geo, mats);
     const rig = new THREE.Group(); rig.add(car); scene.add(rig);
@@ -725,6 +732,21 @@ try {
       p.rotation.x = -Math.PI / 2; p.position.set(s * W * 0.32, 0.016, L / 2 + L * 0.38); p.scale.set(W * 0.85, L * 0.75, 1); p.renderOrder = 2;
       scene.add(p); return p;
     });
+    // red glow along the rear light bar + a red pool on the floor behind
+    const redTex = (() => { const cv = document.createElement("canvas"); cv.width = cv.height = 128; const g = cv.getContext("2d"), r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+      r.addColorStop(0, "rgba(255,40,40,1)"); r.addColorStop(0.3, "rgba(255,20,30,.5)"); r.addColorStop(1, "rgba(255,0,20,0)"); g.fillStyle = r; g.fillRect(0, 0, 128, 128);
+      const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+    const redGlows = [];
+    if (tailN) {
+      const y = tailY / tailN, back = front > 0 ? bb.min[ax] : bb.max[ax];
+      for (let i = 0; i < 7; i++) {
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: redTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+        sp.position[sx] = tailMin + (tailMax - tailMin) * (i / 6); sp.position.y = y; sp.position[ax] = back - front * L * 0.015;
+        sp.scale.set(W * 0.3, H * 0.16, 1); car.add(sp); redGlows.push(sp);
+      }
+    }
+    const redPool = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: redTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+    redPool.rotation.x = -Math.PI / 2; redPool.position.set(0, 0.015, -L / 2 - L * 0.12); redPool.scale.set(W * 1.6, L * 0.35, 1); redPool.renderOrder = 2; scene.add(redPool);
     const wash = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
     wash.rotation.x = -Math.PI / 2; wash.position.set(0, 0.014, L / 2 + L * 0.5); wash.scale.set(W * 2.2, L * 1.3, 1); wash.renderOrder = 2; scene.add(wash);
 
@@ -817,6 +839,7 @@ try {
       beams.forEach(sp => sp.intensity = lampLevel * 160);
       glows.forEach(g => g.material.opacity = lampLevel * 0.95);
       pools.forEach(p => p.material.opacity = lampLevel * 0.85); wash.material.opacity = lampLevel * 0.35;
+      tailMat.emissiveIntensity = 0.15 + lampLevel * 4; redGlows.forEach(g => g.material.opacity = lampLevel * 0.8); redPool.material.opacity = lampLevel * 0.45;
       if (shake > 0) { shake = Math.max(0, shake - 0.015); needs = true; }
       rig.position.y = Math.sin(now * 0.05) * 0.004 * shake;
       rig.rotation.z = Math.sin(now * 0.07) * 0.0012 * shake;
