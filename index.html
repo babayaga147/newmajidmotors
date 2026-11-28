@@ -612,7 +612,8 @@ try {
   controls.enableDamping = true; controls.dampingFactor = 0.06; controls.enablePan = false;
   controls.minPolarAngle = 0.9; controls.maxPolarAngle = 1.52;
   controls.autoRotate = false; controls.autoRotateSpeed = 0.55;   // still by default: the scene only redraws when something moves
-  if (mobile) { controls.enabled = false; canvas.style.touchAction = "pan-y"; }
+  // phones: one-finger sideways drag turns the car, vertical swipes still scroll the page
+  if (mobile) { controls.enableZoom = false; controls.rotateSpeed = 0.9; canvas.style.touchAction = "pan-y"; }
 
   /* ---------- car ---------- */
   const draco = new DRACOLoader(); draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
@@ -713,25 +714,60 @@ try {
     const introTubes = (now) => { const e = performance.now() - t0; if (e > 1700) { tubeState(true); return true; } let k = 0; while (k < flick.length && e > flick[k]) k++; tubeState(k % 2 === 1 && Math.random() > 0.15); return false; };
 
     /* ---------- engine + headlamps ---------- */
-    const engine = new Audio("assets/engine.m4a"); engine.preload = "auto";
+    /* engine sound: ignition once, then a seamless idle loop until switched off (Web Audio) */
+    const ACtx = window.AudioContext || window.webkitAudioContext;
+    const ac = ACtx ? new ACtx() : null, master = ac ? ac.createGain() : null;
+    if (ac) master.connect(ac.destination);
+    let startBuf = null, idleBuf = null, srcs = [];
+    const IGN = 1.75, IDLE_A = 3.4, IDLE_B = 6.9, XF = 0.35;   // seconds in engine.m4a
+    if (ac) fetch("assets/engine.m4a").then(r => r.arrayBuffer()).then(b => new Promise((ok, no) => ac.decodeAudioData(b, ok, no))).then(buf => {
+      const sr = buf.sampleRate, ch = buf.numberOfChannels;
+      const s0 = Math.floor(IGN * sr), a = Math.floor(IDLE_A * sr), e = Math.floor(IDLE_B * sr), x = Math.floor(XF * sr), n = e - a - x;
+      startBuf = ac.createBuffer(ch, a + x - s0, sr); idleBuf = ac.createBuffer(ch, n, sr);
+      for (let c = 0; c < ch; c++) {
+        const d = buf.getChannelData(c), st = startBuf.getChannelData(c), id = idleBuf.getChannelData(c);
+        for (let i = 0; i < st.length; i++) st[i] = d[s0 + i] * (i > st.length - x ? (st.length - i) / x : 1);
+        for (let i = 0; i < n; i++) {           // crossfade the tail into the head so the loop has no seam
+          const t = i < x ? i / x : 1;
+          id[i] = d[a + x + i] * t + (i < x ? d[e - x + i] * (1 - t) : 0);
+        }
+      }
+      if (running && !srcs.length) playEngine();
+    }).catch(() => {});
+    function stopEngine(fade) {
+      if (!ac) return; const t = ac.currentTime;
+      master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(master.gain.value, t); master.gain.linearRampToValueAtTime(0, t + fade);
+      const old = srcs; srcs = []; old.forEach(s => { try { s.stop(t + fade + 0.05); } catch (e) {} });
+    }
+    function playEngine() {
+      if (!ac || !startBuf) return; stopEngine(0.05);
+      const t = ac.currentTime + 0.08;
+      master.gain.setValueAtTime(0, t); master.gain.linearRampToValueAtTime(0.9, t + 0.06);
+      const s1 = ac.createBufferSource(); s1.buffer = startBuf; s1.connect(master); s1.start(t);
+      const s2 = ac.createBufferSource(); s2.buffer = idleBuf; s2.loop = true; s2.connect(master);
+      s2.start(t + startBuf.duration - XF);
+      // the ignition clip fades out over XF while the idle loop starts from a matching point
+      srcs = [s1, s2];
+    }
     const btnEngine = document.getElementById("btnEngine"), btnLamps = document.getElementById("btnLamps"), btnSpin = document.getElementById("btnSpin");
     let running = false, lamps = false, shake = 0, lampLevel = 0;
     function setLamps(on) { lamps = on; btnLamps.setAttribute("aria-pressed", on); }
     function armSound() {
       const evs = ["pointerdown", "keydown", "touchstart"];
-      const go = (e) => { if (e.target.closest && e.target.closest("#btnEngine")) return; evs.forEach(n => removeEventListener(n, go, true)); if (running) { engine.currentTime = 2.2; engine.play().catch(() => {}); } };
+      const go = (e) => { if (e.target.closest && e.target.closest("#btnEngine")) return; evs.forEach(n => removeEventListener(n, go, true)); if (running && ac) ac.resume().then(playEngine); };
       evs.forEach(n => addEventListener(n, go, true));
     }
     function setEngine(on) {
       running = on; btnEngine.setAttribute("aria-pressed", on);
       btnEngine.querySelector("span").textContent = on ? "Engine off" : "Start engine";
-      if (on) { shake = 1; engine.currentTime = 0; engine.play().catch(armSound); } else engine.pause();
+      if (!ac) return;
+      if (on) { shake = 1; if (ac.state !== "running") armSound(); ac.resume().then(() => { if (ac.state === "running" && running) playEngine(); }).catch(() => {}); }
+      else stopEngine(0.6);
     }
     btnEngine.addEventListener("click", () => setEngine(!running));
     btnLamps.addEventListener("click", () => setLamps(!lamps));
     btnSpin.addEventListener("click", () => {
       const on = btnSpin.getAttribute("aria-pressed") !== "true"; btnSpin.setAttribute("aria-pressed", on);
-      if (mobile) { controls.enabled = on; canvas.style.touchAction = on ? "none" : "pan-y"; }
       controls.autoRotate = on && !reduce; needs = true;
     });
 
