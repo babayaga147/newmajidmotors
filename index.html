@@ -593,7 +593,7 @@ try {
   floor.rotation.x = -Math.PI / 2; scene.add(floor);
   const room = new THREE.Mesh(new THREE.BoxGeometry(16, 5.2, 18),
     new THREE.MeshStandardMaterial({ color: 0x18181a, roughness: 0.95, metalness: 0, side: THREE.BackSide, envMapIntensity: 0.12 }));
-  room.position.y = 2.6; scene.add(room);
+  room.position.y = 2.5; scene.add(room);   // room floor sits below the garage floor (no two surfaces at the same height)
   const tubeOn = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), tubeOff = new THREE.MeshBasicMaterial({ color: 0x222224 });
   const tubes = [-1.5, 0, 1.5].map(x => { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 3.6, 12), tubeOff); r.rotation.x = Math.PI / 2; r.position.set(x, 3.4, 0); scene.add(r); return r; });
   // lighting from the top only: one soft spotlight straight down + a faint fill
