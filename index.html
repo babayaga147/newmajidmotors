@@ -573,7 +573,7 @@ try {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x070708);
   scene.fog = new THREE.Fog(0x070708, 12, 26);
-  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.5, 60);
 
   /* ---------- reflections: dark room with bright overhead strips, baked once ---------- */
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -606,8 +606,8 @@ try {
   const g2 = sh.getContext("2d"), grd = g2.createRadialGradient(128, 128, 10, 128, 128, 128);
   grd.addColorStop(0, "rgba(0,0,0,.95)"); grd.addColorStop(.55, "rgba(0,0,0,.6)"); grd.addColorStop(1, "rgba(0,0,0,0)");
   g2.fillStyle = grd; g2.fillRect(0, 0, 256, 256);
-  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sh), transparent: true, depthWrite: false }));
-  shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.003; scene.add(shadow);
+  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sh), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+  shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.012; shadow.renderOrder = 1; scene.add(shadow);
 
   /* ---------- controls ---------- */
   const controls = new OrbitControls(camera, canvas);
@@ -713,7 +713,7 @@ try {
     /* ---------- intro: tube lights flicker on ---------- */
     const t0 = performance.now(), flick = [0, 120, 180, 420, 470, 900, 960, 1080, 1500];
     const tubeState = (on) => { tubes.forEach(r => r.material = on ? tubeOn : tubeOff); top.intensity = on ? 70 : 0; fill.intensity = on ? 0.35 : 0; hemi.intensity = on ? 0.12 : 0; };
-    const introTubes = (now) => { const e = now - t0; if (e > 1700) { tubeState(true); return true; } let k = 0; while (k < flick.length && e > flick[k]) k++; tubeState(k % 2 === 1 && Math.random() > 0.15); return false; };
+    const introTubes = (now) => { const e = performance.now() - t0; if (e > 1700) { tubeState(true); return true; } let k = 0; while (k < flick.length && e > flick[k]) k++; tubeState(k % 2 === 1 && Math.random() > 0.15); return false; };
 
     /* ---------- engine + headlamps ---------- */
     const engine = new Audio("assets/engine.m4a"); engine.preload = "auto";
