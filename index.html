@@ -487,8 +487,8 @@ function load(play=true){
   if (!play) return;
   startPlay();
 }
-/* sound on: try to play with sound; browsers that block it play muted and turn sound on at the visitor's first tap, click or key press */
-let wantSound = true;
+/* sound off by default: the video plays muted; the speaker button turns sound on */
+let wantSound = false;
 const snd = document.getElementById("sound");
 function syncSnd(){ snd.setAttribute("aria-pressed", !v.muted); snd.setAttribute("aria-label", v.muted ? "Turn engine sound on" : "Turn engine sound off"); }
 function armUnmute(){
@@ -782,7 +782,7 @@ try {
     renderer.setAnimationLoop((now) => {
       if (!visible) return;
       const moved = controls.update();
-      if (!introDone) { introDone = introTubes(now); needs = true; if (introDone) setEngine(true); }
+      if (!introDone) { introDone = introTubes(now); needs = true; }   // silent on open: sound only when the visitor presses "Start engine"
       if (introDone && !revealed && performance.now() - t0 > 2600) { revealed = true; document.body.classList.add("revealed"); }
       const target = lamps ? 1 : 0;
       if (Math.abs(target - lampLevel) > 0.002) { lampLevel += (target - lampLevel) * 0.12; needs = true; } else lampLevel = target;
