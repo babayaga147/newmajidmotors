@@ -544,7 +544,6 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { mergeVertices, toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
 
 if (window.__videoStarted) throw new Error("video hero already running");
 window.__3dLoading = true;
@@ -552,7 +551,6 @@ window.__3dLoading = true;
 /* ===== Settings ===== */
 const MODEL = "assets/car.glb";
 const PAINT = 0xa3070c;      // Scarlet Red
-const CREASE = 50;           // degrees: edges softer than this are smoothed, sharper ones stay crisp
 
 const hero = document.querySelector(".hero");
 const canvas = document.getElementById("garage");
@@ -613,7 +611,7 @@ try {
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true; controls.dampingFactor = 0.06; controls.enablePan = false;
   controls.minPolarAngle = 0.9; controls.maxPolarAngle = 1.52;
-  controls.autoRotate = !reduce; controls.autoRotateSpeed = 0.55;
+  controls.autoRotate = false; controls.autoRotateSpeed = 0.55;   // still by default: the scene only redraws when something moves
   if (mobile) { controls.enabled = false; canvas.style.touchAction = "pan-y"; }
 
   /* ---------- car ---------- */
@@ -631,9 +629,8 @@ try {
     gltf.scene.updateMatrixWorld(true);
     let geo = mesh.geometry.clone(); geo.applyMatrix4(mesh.matrixWorld);
 
-    // smooth, reflective panels: soften shallow edges, keep sharp creases
-    try { geo.deleteAttribute("normal"); geo = mergeVertices(toCreasedNormals(geo, THREE.MathUtils.degToRad(CREASE)), 1e-5); }
-    catch (e) { console.warn("smoothing skipped", e); geo.computeVertexNormals(); }
+    // smooth, reflective panels (fast: one pass over the shared vertices)
+    if (geo.index) { geo.deleteAttribute("normal"); geo.computeVertexNormals(); }
     if (!geo.index) { const n = geo.attributes.position.count, idx = new Uint32Array(n); for (let i = 0; i < n; i++) idx[i] = i; geo.setIndex(new THREE.BufferAttribute(idx, 1)); }
 
     geo.computeBoundingBox();
@@ -734,27 +731,35 @@ try {
     btnLamps.addEventListener("click", () => setLamps(!lamps));
     btnSpin.addEventListener("click", () => {
       const on = btnSpin.getAttribute("aria-pressed") !== "true"; btnSpin.setAttribute("aria-pressed", on);
-      if (mobile) { controls.enabled = on; canvas.style.touchAction = on ? "none" : "pan-y"; controls.autoRotate = !on && !reduce; }
-      else controls.autoRotate = on;
+      if (mobile) { controls.enabled = on; canvas.style.touchAction = on ? "none" : "pan-y"; }
+      controls.autoRotate = on && !reduce; needs = true;
     });
-    if (!mobile) btnSpin.setAttribute("aria-pressed", String(!reduce));
 
     /* ---------- loop ---------- */
-    function resize() { const w = hero.clientWidth, h = hero.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w / h < 0.8 ? 46 : 32; camera.updateProjectionMatrix(); }
+    let needs = true; controls.addEventListener("change", () => { needs = true; });
+    function resize() { needs = true; const w = hero.clientWidth, h = hero.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w / h < 0.8 ? 46 : 32; camera.updateProjectionMatrix(); }
     resize(); addEventListener("resize", resize);
     let visible = true; new IntersectionObserver(([e]) => { visible = e.isIntersecting; }).observe(hero);
     let introDone = false, revealed = false;
+    // speed: draw only when something changes, and lower the resolution on slow devices
+    let last = 0, slowFrames = 0, measured = 0, dpr = renderer.getPixelRatio();
     renderer.setAnimationLoop((now) => {
       if (!visible) return;
-      if (!introDone) { introDone = introTubes(now); if (introDone) setEngine(true); }
-      if (introDone && !revealed && now - t0 > 2600) { revealed = true; document.body.classList.add("revealed"); }
-      lampLevel += ((lamps ? 1 : 0) - lampLevel) * 0.12;
+      const moved = controls.update();
+      if (!introDone) { introDone = introTubes(now); needs = true; if (introDone) setEngine(true); }
+      if (introDone && !revealed && performance.now() - t0 > 2600) { revealed = true; document.body.classList.add("revealed"); }
+      const target = lamps ? 1 : 0;
+      if (Math.abs(target - lampLevel) > 0.002) { lampLevel += (target - lampLevel) * 0.12; needs = true; } else lampLevel = target;
       lampMat.emissiveIntensity = lampLevel * 2.2; beams.forEach(sp => sp.intensity = lampLevel * 45);
-      shake = Math.max(0, shake - 0.012);
-      rig.position.y = Math.sin(now * 0.09) * (running ? 0.0006 : 0) + Math.sin(now * 0.05) * 0.004 * shake;
+      if (shake > 0) { shake = Math.max(0, shake - 0.015); needs = true; }
+      rig.position.y = Math.sin(now * 0.05) * 0.004 * shake;
       rig.rotation.z = Math.sin(now * 0.07) * 0.0012 * shake;
-      controls.update();
+      if (!needs && !moved) { last = 0; return; }
+      needs = false;
       renderer.render(scene, camera);
+      if (last && measured < 90) { measured++; if (now - last > 34) slowFrames++;
+        if (measured === 90 && slowFrames > 30 && dpr > 0.75) { dpr = 0.75; renderer.setPixelRatio(dpr); resize(); } }
+      last = now;
     });
   }, undefined, (e) => { clearTimeout(timeout); fail(e); });
 } catch (e) { fail(e); }
