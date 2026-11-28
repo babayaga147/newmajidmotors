@@ -550,7 +550,7 @@ window.__3dLoading = true;
 
 /* ===== Settings ===== */
 const MODEL = "assets/car.glb";
-const PAINT = 0xa3070c;      // Scarlet Red
+const PAINT = 0x3b3f44; // shiny gunmetal grey
 
 const hero = document.querySelector(".hero");
 const canvas = document.getElementById("garage");
@@ -692,7 +692,7 @@ try {
       if (k === LAMP) return lampMat;
       if (k === LENS) return lensMat;
       if (k === TAIL) return tailMat;
-      if (k === body) return new THREE.MeshPhysicalMaterial({ color: PAINT, metalness: 0.15, roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.02, envMapIntensity: 1.5 });
+      if (k === body) return new THREE.MeshPhysicalMaterial({ color: PAINT, metalness: 0.85, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.03, envMapIntensity: 1.8 });
       if (k === GLASS || k === 15) return new THREE.MeshPhysicalMaterial({ color: 0x0b0d10, roughness: 0.03, transparent: true, opacity: 0.55, envMapIntensity: 1.4, depthWrite: false });
       const Lm = lum(hex);
       if (Lm < 0.012) return new THREE.MeshStandardMaterial({ color: hex, roughness: 0.7, metalness: 0.05, envMapIntensity: 0.6 });
