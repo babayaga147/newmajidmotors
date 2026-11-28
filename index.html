@@ -316,7 +316,6 @@ footer .brand span{font-size:1rem;color:#fff}
     <button class="skip video-only" id="skip" type="button">Skip intro</button>
     <div class="ctrls3d" role="group" aria-label="Car controls">
       <button class="pill" id="btnEngine" type="button" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1011.4 0"/></svg><span>Start engine</span></button>
-      <button class="pill" id="btnLights" type="button" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 6c-4 0-7 2.7-7 6s3 6 7 6c1.5 0 2-2.7 2-6s-.5-6-2-6z"/><path d="M3 9h3M3 12h3M3 15h3"/></svg><span>Lights</span></button>
       <button class="pill" id="btnSpin" type="button" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12a8 8 0 01-14.9 4"/><path d="M4 12a8 8 0 0114.9-4"/><path d="M19 3v5h-5M5 21v-5h5"/></svg><span>Rotate</span></button>
     </div>
     <div class="ctrls video-only">
@@ -544,11 +543,6 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
-import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 
 if (window.__videoStarted) throw new Error("video hero already running");
 window.__3dLoading = true;
@@ -566,11 +560,10 @@ try {
   hero.classList.add("three-loading");
   /* ---------- renderer ---------- */
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.5 : 2));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1 : 1.25));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
-  RectAreaLightUniformsLib.init();
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x070708);
@@ -601,16 +594,18 @@ try {
 
   // overhead tube lights: visible glowing rods + real area lights
   const tubes = [];
-  const tubeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 1, 1).multiplyScalar(4), toneMapped: false });
+  const tubeMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
   const tubeOff = new THREE.MeshBasicMaterial({ color: 0x222224 });
   for (const x of [-1.5, 0, 1.5]) {
     const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 3.6, 12), tubeOff);
     rod.rotation.x = Math.PI / 2; rod.position.set(x, 3.4, 0); garage.add(rod);
-    const area = new THREE.RectAreaLight(0xffffff, 0, 0.14, 3.6);
-    area.position.set(x, 3.38, 0); area.lookAt(x, 0, 0); garage.add(area);
-    tubes.push({ rod, area });
+    tubes.push({ rod });
   }
   const hemi = new THREE.HemisphereLight(0xffffff, 0x0a0a0a, 0.0); scene.add(hemi);
+  // the one key light: straight down from the ceiling, a soft pool of light on the car and floor
+  const top = new THREE.SpotLight(0xffffff, 0, 14, 0.62, 0.9, 1.1);
+  top.position.set(0, 4.6, 0); top.target.position.set(0, 0, 0); scene.add(top, top.target);
+  const fill = new THREE.DirectionalLight(0xffffff, 0); fill.position.set(0, 6, 1); scene.add(fill);
 
   // soft contact shadow under the car
   const sh = document.createElement("canvas"); sh.width = sh.height = 256;
@@ -621,12 +616,6 @@ try {
     new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sh), transparent: true, depthWrite: false }));
   shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.003; garage.add(shadow);
 
-  /* ---------- post: bloom for tubes and headlights ---------- */
-  const composer = new EffectComposer(renderer);
-  composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), mobile ? 0.45 : 0.7, 0.5, 0.88);
-  composer.addPass(bloom);
-  composer.addPass(new OutputPass());
 
   /* ---------- controls ---------- */
   const controls = new OrbitControls(camera, canvas);
@@ -677,9 +666,9 @@ try {
     for (let cell = 0; cell < 16; cell++) { let n = 0; while (start/3 + n < tri && cellOf[order[start/3 + n]] === cell) n++; if (n) geo.addGroup(start, n*3, cell); start += n*3; }
 
     const lum = (h) => { const col = new THREE.Color(h); return 0.2126*col.r + 0.7152*col.g + 0.0722*col.b; };
-    // body paint = the biggest swatch that isn't near-black or glass
-    let body = -1; for (let k = 0; k < 15; k++) if (lum(SWATCH[k]) > 0.02 && (body < 0 || area[k] > area[body])) body = k;
-    const lights = body === 0 ? -1 : 0;   // white swatch = lamps, unless the body itself is white
+    // body paint = the biggest swatch on the car (glass excluded)
+    let body = -1; for (let k = 0; k < 15; k++) if (body < 0 || area[k] > area[body]) body = k;
+    const lights = -1;   // no glowing parts: the car is lit only from the ceiling
     console.table([...Array(16).keys()].map(k => ({ swatch: k, colour: SWATCH[k], area: +area[k].toFixed(3), role: k === body ? "PAINT" : k === lights ? "LAMPS" : k === GLASS ? "GLASS" : "" })));
 
     const mats = SWATCH.map((hex, k) => {
@@ -708,15 +697,6 @@ try {
     shadow.scale.set(W * 1.55, L * 1.25, 1);
     shadow.rotation.z = 0;
 
-    // headlight beams (spotlights) from the front corners
-    const lampY = lights >= 0 && area[lights] > 0 ? (cy[lights] / area[lights]) - bb.min.y : H * 0.45;
-    headInfo = [];
-    for (const s of [-1, 1]) {
-      const spot = new THREE.SpotLight(0xf2f6ff, 0, 18, 0.42, 0.55, 1.4);
-      spot.position.set(s * W * 0.34, lampY, L / 2 - 0.15);
-      spot.target.position.set(s * W * 0.5, 0, L / 2 + 6);
-      scene.add(spot, spot.target); headInfo.push(spot);
-    }
 
     // camera: low front-right corner, whole car in frame
     controls.target.set(0, H * 0.42, 0);
@@ -732,8 +712,9 @@ try {
     const flick = [0, 120, 180, 420, 470, 900, 960, 1080, 1500];
     let tubesOn = false;
     function tubeState(on) {
-      tubes.forEach(t => { t.rod.material = on ? tubeMat : tubeOff; t.area.intensity = on ? 55 : 0; });
-      hemi.intensity = on ? 0.25 : 0.0;
+      tubes.forEach(t => { t.rod.material = on ? tubeMat : tubeOff; });
+      top.intensity = on ? 70 : 0; fill.intensity = on ? 0.35 : 0;
+      hemi.intensity = on ? 0.12 : 0.0;
     }
     function introTubes(now) {
       const e = now - t0; if (e > 1700) { tubeState(true); tubesOn = true; return true; }
@@ -744,19 +725,12 @@ try {
     /* ---------- engine + lights ---------- */
     const engine = new Audio("assets/engine.m4a"); engine.preload = "auto";
     let running = false, lampsOn = false, shake = 0;
-    const btnEngine = document.getElementById("btnEngine"), btnLights = document.getElementById("btnLights"), btnSpin = document.getElementById("btnSpin");
-    function setLamps(on) {
-      lampsOn = on; btnLights.setAttribute("aria-pressed", on);
-      const target = on ? 1 : 0, from = lightMats[0] ? lightMats[0].emissiveIntensity / 6 : 0, s0 = performance.now();
-      (function ramp(n) { const k = Math.min(1, (n - s0) / 450), v = from + (target - from) * k;
-        lightMats.forEach(m => m.emissiveIntensity = v * 6); headInfo.forEach(sp => sp.intensity = v * 60);
-        if (k < 1) requestAnimationFrame(ramp); })(s0);
-    }
+    const btnEngine = document.getElementById("btnEngine"), btnSpin = document.getElementById("btnSpin");
     function setEngine(on, withSound = true) {
       running = on; btnEngine.setAttribute("aria-pressed", on);
       btnEngine.querySelector("span").textContent = on ? "Engine off" : "Start engine";
-      if (on) { shake = 1; if (withSound) { engine.currentTime = 0; engine.play().catch(() => armSound()); } setTimeout(() => setLamps(true), 650); }
-      else { engine.pause(); setLamps(false); }
+      if (on) { shake = 1; if (withSound) { engine.currentTime = 0; engine.play().catch(() => armSound()); } }
+      else { engine.pause(); }
     }
     function armSound() {   // browsers may block sound until the first tap or key press
       const evs = ["pointerdown", "keydown", "touchstart"];
@@ -764,7 +738,6 @@ try {
       evs.forEach(n => addEventListener(n, go, true));
     }
     btnEngine.addEventListener("click", () => setEngine(!running));
-    btnLights.addEventListener("click", () => setLamps(!lampsOn));
     btnSpin.addEventListener("click", () => {
       const on = btnSpin.getAttribute("aria-pressed") !== "true"; btnSpin.setAttribute("aria-pressed", on);
       if (mobile) { controls.enabled = on; canvas.style.touchAction = on ? "none" : "pan-y"; controls.autoRotate = !on && !reduce; }
@@ -775,7 +748,7 @@ try {
     /* ---------- loop ---------- */
     function resize() {
       const w = hero.clientWidth, h = hero.clientHeight;
-      renderer.setSize(w, h, false); composer.setSize(w, h); bloom.setSize(w, h);
+      renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.fov = w / h < 0.8 ? 46 : 32;   // portrait phones need a wider lens to fit the car
       camera.updateProjectionMatrix();
@@ -793,7 +766,7 @@ try {
       rig.position.y = (Math.sin(now * 0.09) * idle) + Math.sin(now * 0.05) * 0.004 * shake;
       rig.rotation.z = Math.sin(now * 0.07) * 0.0012 * shake;
       controls.update();
-      composer.render();
+      renderer.render(scene, camera);
     });
   }, undefined, (e) => { clearTimeout(timeout); fail(e); });
 } catch (e) { fail(e); }
